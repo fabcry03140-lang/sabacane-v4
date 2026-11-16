@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sarbacane IA — Prototype de Calibration</title>
+    <style>
+        body { font-family: sans-serif; background: #101820; color: #fff; padding: 20px; text-align: center; }
+        .container { max-width: 600px; margin: auto; background: #17212b; padding: 20px; border-radius: 8px; }
+        canvas { background: #000; width: 100%; max-width: 500px; border-radius: 4px; margin-top: 15px; }
+        button { background: #0084ff; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px; }
+        button:hover { background: #0066cc; }
+        .status { color: #00ffcc; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sarbacane IA</h1>
+        <p>Simulation de détection de marqueurs de coins et zoom automatique</p>
+        
+        <button id="btnVideo">1. Activer Caméra (avec Zoom)</button>
+        <button id="btnIa">2. Simuler Détection IA</button>
+        
+        <div class="status" id="statusTxt">En attente d'activation...</div>
+        <canvas id="videoCanvas" width="500" height="500"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusTxt = document.getElementById('statusTxt');
+
+        // Coordonnées simulées des 4 marqueurs de coins (ArUco / QR codes)
+        const marqueurs = [
+            {x: 120, y: 110, label: "Haut-Gauche"},
+            {x: 390, y: 130, label: "Haut-Droite"},
+            {x: 100, y: 380, label: "Bas-Gauche"},
+            {x: 410, y: 400, label: "Bas-Droite"}
+        ];
+
+        function dessinerScene(avecCentre = false) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Dessin de la cible simulée (déformée par un léger angle de biais)
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 2;
+            for(let r = 140; r > 10; r -= 25) {
+                ctx.beginPath();
+                ctx.arc(252, 255, r, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            // Dessin des 4 marqueurs de coins (petits carrés QR-ArUco)
+            ctx.fillStyle = '#fff';
+            marqueurs.forEach(m => {
+                ctx.fillRect(m.x - 15, m.y - 15, 30, 30);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(m.x - 8, m.y - 8, 16, 16);
+                ctx.fillStyle = '#fff';
+            });
+
+            if (avecCentre) {
+                // Équation mathématique d'intersection des diagonales pour trouver le centre exact
+                // Ligne 1 : M[0] à M[3] (Haut-Gauche à Bas-Droite)
+                // Ligne 2 : M[1] à M[2] (Haut-Droite à Bas-Gauche)
+                const x1 = marqueurs[0].x, y1 = marqueurs[0].y;
+                const x2 = marqueurs[3].x, y2 = marqueurs[3].y;
+                const x3 = marqueurs[1].x, y3 = marqueurs[1].y;
+                const x4 = marqueurs[2].x, y4 = marqueurs[2].y;
+
+                const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                const px = ((x1*y2 - y1*x2)*(x3 - x4) - (x1 - x2)*(x3*y4 - y3*x4)) / denom;
+                const py = ((x1*y2 - y1*x2)*(y3 - y4) - (y1 - y2)*(x3*y4 - y3*x4)) / denom;
+
+                // Tracer les lignes d'alignement IA
+                ctx.strokeStyle = 'rgba(0, 255, 204, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x3, y3); ctx.lineTo(x4, y4); ctx.stroke();
+
+                // Afficher le centre géométrique parfait calculé
+                ctx.fillStyle = '#ff3333';
+                ctx.beginPath();
+                ctx.arc(px, py, 6, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                statusTxt.innerText = `Centre détecté automatiquement : X=${Math.round(px)}, Y=${Math.round(py)}`;
+            }
+        }
+
+        document.getElementById('btnVideo').addEventListener('click', async () => {
+            statusTxt.innerText = "Caméra lancée. Tentative d'activation du zoom matériel...";
+            dessinerScene(false);
+            
+            // Bloc d'intégration du Zoom pour l'API PWA / Caméra mobile
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                
+                // Si le smartphone gère le zoom matériel à 2,50m
+                if (capabilities.zoom) {
+                    await track.applyConstraints({ advanced: [{ zoom: Math.min(3, capabilities.zoom.max) }] });
+                    statusTxt.innerText = "Caméra active avec Zoom matériel appliqué !";
+                }
+            } catch (err) {
+                statusTxt.innerText = "Mode simulation (Le zoom requiert HTTPS et un mobile).";
+            }
+        });
+
+        document.getElementById('btnIa').addEventListener('click', () => {
+            dessinerScene(true);
+        });
+
+        // Premier rendu au chargement
+        dessinerScene(false);
+    </script>
+</body>
+</html>
