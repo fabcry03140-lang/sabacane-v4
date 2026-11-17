@@ -12,12 +12,13 @@ from tkinter.filedialog import askdirectory
 # CHOIX DU DOSSIER
 # ==================================================
 
-root = Tk()
-root.withdraw()
-root.attributes("-topmost", True)
-
-DOSSIER_IMAGES = askdirectory(title="Choisir le dossier des images")
-root.destroy()
+DOSSIER_IMAGES = os.environ.get("SARBACANE_IMAGES_DIR")
+if not DOSSIER_IMAGES:
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    DOSSIER_IMAGES = askdirectory(title="Choisir le dossier des images")
+    root.destroy()
 
 if not DOSSIER_IMAGES:
     print("Aucun dossier sélectionné")
@@ -58,7 +59,7 @@ cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 if not cap.isOpened():
     print("Impossible d'ouvrir la caméra")
-    raise SystemExit
+    raise SystemExit(1)
 
 # ==================================================
 # REDRESSEMENT STABILISE AVEC MARGE

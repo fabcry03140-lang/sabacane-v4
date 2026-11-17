@@ -16,11 +16,12 @@ import cv2
 from tkinter import Tk
 from tkinter.filedialog import askdirectory
 
-Tk().withdraw()
-
-DOSSIER_IMAGES = askdirectory(
-    title="Choisir le dossier des images"
-)
+DOSSIER_IMAGES = os.environ.get("SARBACANE_IMAGES_DIR")
+if not DOSSIER_IMAGES:
+    root = Tk()
+    root.withdraw()
+    DOSSIER_IMAGES = askdirectory(title="Choisir un dossier d'images")
+    root.destroy()
 
 # ----------------------------------------------------------
 # VARIABLES GLOBALES
@@ -43,6 +44,10 @@ def souris(event, x, y, flags, param):
 # ----------------------------------------------------------
 # CHARGEMENT DES IMAGES
 # ----------------------------------------------------------
+
+if not DOSSIER_IMAGES:
+    print("Aucun dossier sélectionné")
+    raise SystemExit
 
 images = sorted([
     f for f in os.listdir(DOSSIER_IMAGES)
