@@ -27,16 +27,18 @@ DOSSIER_IMAGES = askdirectory(
 # ----------------------------------------------------------
 
 point = None
+vue_dirty = True
 
 # ----------------------------------------------------------
 # SOURIS
 # ----------------------------------------------------------
 
 def souris(event, x, y, flags, param):
-    global point
+    global point, vue_dirty
 
     if event == cv2.EVENT_LBUTTONDOWN:
         point = (x, y)
+        vue_dirty = True
 
 # ----------------------------------------------------------
 # CHARGEMENT DES IMAGES
@@ -100,6 +102,7 @@ while True:
         continue
 
     point = None
+    vue_dirty = True
 
     # ------------------------------------------------------
     # CHARGER ANNOTATION EXISTANTE
@@ -133,42 +136,44 @@ while True:
 
     while True:
 
-        vue = image.copy()
+        # Ne reconstruire et recopier l'image qu'après une modification.
+        if vue_dirty:
+            vue = image.copy()
 
-        if point is not None:
+            if point is not None:
+                cv2.circle(
+                    vue,
+                    point,
+                    8,
+                    (0, 0, 255),
+                    -1
+                )
 
-            cv2.circle(
+            cv2.putText(
                 vue,
-                point,
-                8,
-                (0, 0, 255),
-                -1
+                f"{index+1}/{len(images)}",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (0, 255, 0),
+                2
             )
 
-        cv2.putText(
-            vue,
-            f"{index+1}/{len(images)}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.9,
-            (0, 255, 0),
-            2
-        )
+            cv2.putText(
+                vue,
+                nom_image,
+                (20, 80),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2
+            )
 
-        cv2.putText(
-            vue,
-            nom_image,
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 255),
-            2
-        )
-
-        cv2.imshow(
-            "Annotation",
-            vue
-        )
+            cv2.imshow(
+                "Annotation",
+                vue
+            )
+            vue_dirty = False
 
         touche = cv2.waitKey(20) & 0xFF
 
@@ -225,6 +230,7 @@ while True:
         if touche == ord("e"):
 
             point = None
+            vue_dirty = True
 
             print(
                 "Annotation effacée"

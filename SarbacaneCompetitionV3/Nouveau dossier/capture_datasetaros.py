@@ -35,6 +35,7 @@ SEUIL_DIFF_PIXEL = 35
 MIN_PIXELS_FLECHE = 250
 MAX_PIXELS_CORPS = 25000
 DELAI_STABILISATION = 0.6
+INTERVALLE_DETECTION_ARUCO = 5
 
 # ==================================================
 # ARUCO
@@ -67,34 +68,35 @@ derniere_matrice = None
 IDS_ATTENDUS = (0, 1, 2, 3)
 
 
-def redresser_cible_stable(image):
+def redresser_cible_stable(image, chercher_marqueurs):
     global derniere_matrice
 
-    coins, ids, _ = detecteur.detectMarkers(image)
     aruco_direct = False
+    if chercher_marqueurs:
+        coins, ids, _ = detecteur.detectMarkers(image)
 
-    if ids is not None and len(ids) >= 4:
-        ids_liste = ids.flatten().tolist()
+        if ids is not None and len(ids) >= 4:
+            ids_liste = ids.flatten().tolist()
 
-        if all(marqueur_id in ids_liste for marqueur_id in IDS_ATTENDUS):
-            pts_src = np.zeros((4, 2), dtype=np.float32)
-            for idx_id in IDS_ATTENDUS:
-                index = ids_liste.index(idx_id)
-                centre = np.mean(coins[index][0], axis=0)
-                pts_src[idx_id] = centre
+            if all(marqueur_id in ids_liste for marqueur_id in IDS_ATTENDUS):
+                pts_src = np.zeros((4, 2), dtype=np.float32)
+                for idx_id in IDS_ATTENDUS:
+                    index = ids_liste.index(idx_id)
+                    centre = np.mean(coins[index][0], axis=0)
+                    pts_src[idx_id] = centre
 
-            m = MARGE_EXTERIEURE
-            fin = TAILLE_SORTIE - 1 - m
+                m = MARGE_EXTERIEURE
+                fin = TAILLE_SORTIE - 1 - m
 
-            pts_dst = np.array([
-                [m, m],
-                [fin, m],
-                [fin, fin],
-                [m, fin]
-            ], dtype=np.float32)
+                pts_dst = np.array([
+                    [m, m],
+                    [fin, m],
+                    [fin, fin],
+                    [m, fin]
+                ], dtype=np.float32)
 
-            derniere_matrice = cv2.getPerspectiveTransform(pts_src, pts_dst)
-            aruco_direct = True
+                derniere_matrice = cv2.getPerspectiveTransform(pts_src, pts_dst)
+                aruco_direct = True
 
     if derniere_matrice is not None:
         image_redressee = cv2.warpPerspective(
@@ -120,6 +122,7 @@ mode_ecoute = False
 fleches_capturees = 0
 image_reference_gris = None
 moment_detection = None
+numero_frame = 0
 
 NOM_FENETRE = "Capture Auto Volee (3 Fleches)"
 cv2.namedWindow(NOM_FENETRE, cv2.WINDOW_NORMAL)
@@ -134,7 +137,14 @@ while True:
     if not ret:
         break
 
-    image_redressee, aruco_direct, matrice_dispo = redresser_cible_stable(frame)
+    numero_frame += 1
+    chercher_marqueurs = (
+        derniere_matrice is None
+        or numero_frame % INTERVALLE_DETECTION_ARUCO == 0
+    )
+    image_redressee, aruco_direct, matrice_dispo = redresser_cible_stable(
+        frame, chercher_marqueurs
+    )
 
     if not matrice_dispo:
         apercu = cv2.resize(frame, (TAILLE_SORTIE, TAILLE_SORTIE))
@@ -156,7 +166,8 @@ while True:
         continue
 
     apercu = image_redressee.copy()
-    gris_actuel = preparer_gris(image_redressee)
+    # Le traitement gris/différence n'est utile que pendant une volée.
+    gris_actuel = preparer_gris(image_redressee) if mode_ecoute else None
 
     if mode_ecoute and image_reference_gris is not None:
         diff = cv2.absdiff(image_reference_gris, gris_actuel)
@@ -170,9 +181,9 @@ while True:
 
         elif pixels_modifies > MIN_PIXELS_FLECHE:
             if moment_detection is None:
-                moment_detection = time.time()
+                moment_detection = time.perf_counter()
 
-            temps_ecoule = time.time() - moment_detection
+            temps_ecoule = time.perf_counter() - moment_detection
             statut_texte = f"IMPACT ! Stabilisation ({temps_ecoule:.1f}s)..."
             couleur_statut = (0, 255, 255)
 
@@ -226,7 +237,7 @@ while True:
         mode_ecoute = True
         fleches_capturees = 0
         moment_detection = None
-        image_reference_gris = gris_actuel.copy()
+        image_reference_gris = gris_actuel if gris_actuel is not None else preparer_gris(image_redressee)
         print("\n>>> NOUVELLE VOLEE DEMARREE (0/3) - Vous pouvez tirer ! <<<")
 
     if touche == ord("q"):
